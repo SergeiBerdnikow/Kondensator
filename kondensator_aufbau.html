@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aufbau eines Kondensators – vom Bauteil zum Modell</title>
+<style>
+  :root {
+    --hg: #ffffff; --flaeche: #f4f6f9; --rand: #d5dbe3; --text: #1b2430; --text2: #5a6675;
+    --akzent: #1f5c99;
+    --strom: #c62828; --spannung: #1f5c99; --ladung: #2e7d32;
+    --schrift: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--flaeche); color: var(--text); font-family: var(--schrift);
+         font-size: 1rem; line-height: 1.4; }
+  body.gross { font-size: 1.25rem; }
+  header { display: flex; align-items: center; gap: .8em; padding: .5em 1em;
+           background: var(--akzent); color: #fff; flex-wrap: wrap; }
+  header h1 { font-size: 1.3em; margin: 0; font-weight: 600; flex: 1 1 auto; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+  main { display: grid; gap: .8em; padding: .8em; }
+  .karte { background: var(--hg); border: 1px solid var(--rand); border-radius: 10px; padding: .7em; min-width: 0; }
+  .karte h2 { font-size: 1em; margin: 0 0 .4em; color: var(--text2); font-weight: 600; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  button { font: inherit; font-size: 1em; padding: .45em .9em; min-height: 2.6em; min-width: 2.6em;
+           border-radius: 8px; border: 1px solid var(--rand); background: var(--hg); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--akzent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.haupt { background: var(--akzent); color: #fff; border-color: var(--akzent); font-weight: 600; }
+  button.aktiv { outline: 3px solid var(--akzent); outline-offset: 1px; background: #e3edf8; }
+  button.gross { font-size: 1.15em; font-weight: 600; padding: .6em 1.1em; }
+  .zeile { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+  .messwerte { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: .3em .8em;
+               margin-top: .6em; font-variant-numeric: tabular-nums; }
+  .messwerte div { background: var(--flaeche); border-radius: 6px; padding: .3em .5em; font-size: 1.1em; }
+  .messwerte b { font-weight: 600; }
+  .regler { display: grid; grid-template-columns: repeat(auto-fit, minmax(16em, 1fr)); gap: .6em 1.4em; }
+  .regler label { display: block; font-weight: 600; }
+  .regler .wert { float: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; height: 2.2em; accent-color: var(--akzent); }
+  .presets { margin-top: .7em; }
+  #schritte { display: none; margin-top: .6em; padding: .6em .8em; border-left: 5px solid var(--akzent);
+              background: #eef4fb; border-radius: 6px; }
+  #schritte.an { display: block; }
+  #schrittText { font-size: 1.1em; margin: .2em 0 .5em; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .klein { color: var(--text2); font-size: .85em; }
+  .auftrag { background: #fff8e1; border-left: 5px solid #e0a800; border-radius: 6px; padding: .5em .8em; margin: .5em 0; font-size: 1.05em; }
+  kbd { border: 1px solid var(--rand); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em;
+        font-size: .85em; background: var(--flaeche); }
+  table.tab { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 1.05em; }
+  table.tab th, table.tab td { border: 1px solid var(--rand); padding: .3em .5em; text-align: center; }
+  table.tab th { background: var(--flaeche); font-weight: 600; }
+  .tabhuelle { max-height: 22em; overflow-y: auto; }
+  .strom { color: var(--strom); } .spannung { color: var(--spannung); } .ladung { color: var(--ladung); }
+</style>
+</head>
+<body>
+<style>
+  main { grid-template-columns: minmax(0, 13fr) minmax(0, 7fr); grid-template-areas: "szene text" "info info"; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "szene" "text" "info"; } }
+  #szeneKarte { grid-area: szene; } #textKarte { grid-area: text; } #infoKarte { grid-area: info; }
+  #szene { aspect-ratio: 1300 / 640; height: auto; max-height: 72vh; min-height: 220px; }
+  .stufen { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3em; margin-bottom: .6em; }
+  .stufen button { padding: .3em; font-weight: 700; }
+  #stufeTitel { font-size: 1.3em; font-weight: 700; margin: .2em 0 .4em; color: var(--akzent); }
+  #stufeText { font-size: 1.12em; }
+  #fortschritt { margin-top: .5em; }
+</style>
+<header>
+  <h1>Wie ist ein Kondensator aufgebaut? Vom Bauteil zum Modell</h1>
+  <button id="btnGross" title="Große Schrift für den Beamer (G)">Beamer-Ansicht</button>
+  <button id="btnVoll" title="Vollbild (F)">Vollbild</button>
+</header>
+<main>
+  <section class="karte" id="szeneKarte">
+    <canvas id="szene" aria-label="Animation zum Aufbau eines Kondensators"></canvas>
+  </section>
+  <section class="karte" id="textKarte">
+    <div class="stufen" id="stufen"></div>
+    <div id="stufeTitel"></div>
+    <div id="stufeText"></div>
+    <label class="klein" for="fortschritt" style="display:block;margin-top:.8em">Animation vor- und zurückspulen</label>
+    <input type="range" id="fortschritt" min="0" max="1" step="0.001" value="0">
+    <div class="zeile" style="margin-top:.5em">
+      <button id="btnZurueck2">◀ zurück</button>
+      <button id="btnStart" class="haupt">▶ Abspielen</button>
+      <button id="btnWeiter2" class="haupt">weiter ▶</button>
+    </div>
+    <div class="zeile" style="margin-top:.5em">
+      <button id="btnTour">Alles automatisch zeigen</button>
+      <button id="btnPNG">Bild speichern (PNG)</button>
+    </div>
+  </section>
+  <section class="karte" id="infoKarte">
+    <details>
+      <summary>Was wird hier gezeigt? (Hinweise für die Lehrkraft)</summary>
+      <div id="infoText"></div>
+    </details>
+    <p class="klein">Tastatur: <kbd>←</kbd> <kbd>→</kbd> Schritt zurück/weiter · <kbd>Leertaste</kbd> Abspielen · <kbd>G</kbd> Beamer-Ansicht · <kbd>F</kbd> Vollbild</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* =====================================================================
+   BAUKASTEN – allgemein verwendbar, in neuen Simulationen unverändert lassen
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Schriftgröße auf der Leinwand – wächst in der Beamer-Ansicht mit */
+const fs = px => Math.round(px * (document.body.classList.contains("gross") ? 1.3 : 1));
+
+/** Zahl deutsch formatieren: fmt(1.234, 2, "m") -> "1,23 m" */
+function fmt(x, stellen = 2, einheit = "") {
+  if (!isFinite(x)) return "–";
+  const s = x.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+  return einheit ? s + " " + einheit : s;
+}
+
+/** Canvas mit scharfer Darstellung (HiDPI). Liefert {ctx, b, h} in CSS-Pixeln, passt sich an. */
+function leinwand(canvas, beiGroesse) {
+  const obj = { canvas, ctx: canvas.getContext("2d"), b: 0, h: 0 };
+  const anpassen = (melden = true) => {
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    obj.b = Math.max(1, r.width); obj.h = Math.max(1, r.height);
+    canvas.width = Math.round(obj.b * dpr); canvas.height = Math.round(obj.h * dpr);
+    obj.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (melden && beiGroesse) beiGroesse();
+  };
+  anpassen(false);                       // Größe sofort setzen, Neuzeichnen erst bei Änderungen
+  new ResizeObserver(() => anpassen()).observe(canvas);
+  return obj;
+}
+
+/** Pfeil zeichnen (für Kräfte, Geschwindigkeiten, Maße) */
+function pfeil(ctx, x1, y1, x2, y2, farbe, breite = 3, spitze = 12) {
+  const w = Math.atan2(y2 - y1, x2 - x1), l = Math.hypot(x2 - x1, y2 - y1);
+  if (l < 1) return;
+  const s = Math.min(spitze, l * 0.6);
+  ctx.save(); ctx.strokeStyle = ctx.fillStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - s * 0.7 * Math.cos(w), y2 - s * 0.7 * Math.sin(w)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - s * Math.cos(w - 0.4), y2 - s * Math.sin(w - 0.4));
+  ctx.lineTo(x2 - s * Math.cos(w + 0.4), y2 - s * Math.sin(w + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/** Text mit Hintergrund (gut lesbar über Linien) */
+function beschriftung(ctx, text, x, y, { farbe = "#1b2430", groesse = 15, ausrichtung = "center",
+                                        grundlinie = "middle", fett = false, hintergrund = true } = {}) {
+  ctx.save(); groesse = fs(groesse); ctx.font = `${fett ? "600 " : ""}${groesse}px ${css("--schrift")}`;
+  ctx.textAlign = ausrichtung; ctx.textBaseline = grundlinie;
+  const m = ctx.measureText(text), pad = 3;
+  let x0 = ausrichtung === "center" ? x - m.width / 2 : ausrichtung === "right" ? x - m.width : x;
+  if (hintergrund) { ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillRect(x0 - pad, y - groesse * 0.6 - pad, m.width + 2 * pad, groesse * 1.2 + 2 * pad); }
+  ctx.fillStyle = farbe; ctx.fillText(text, x, y); ctx.restore();
+}
+
+/** "Schöne" Achsenteilung */
+function teilung(min, max, ziel = 6) {
+  const roh = (max - min) / ziel, p = Math.pow(10, Math.floor(Math.log10(roh)));
+  const f = roh / p, schritt = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  const t = []; for (let v = Math.ceil(min / schritt) * schritt; v <= max + 1e-9 * schritt; v += schritt) t.push(v);
+  return { t, schritt, stellen: Math.max(0, -Math.floor(Math.log10(schritt) + 1e-9)) };
+}
+
+/**
+ * Live-Diagramm (Zeitreihen). Beispiel:
+ *   const d = new Diagramm(canvas, {xName:"t", xEinheit:"s", yName:"x", yEinheit:"m", fenster:10});
+ *   d.reihe("x", "Auslenkung", "#1f5c99");  d.punkt("x", t, x);  d.zeichnen();
+ * fenster = sichtbare Zeitspanne (mitlaufend); yMin/yMax fest oder automatisch.
+ */
+class Diagramm {
+  constructor(canvas, opt) {
+    this.o = Object.assign({ xName: "t", xEinheit: "s", yName: null, yEinheit: "", fenster: 10,
+                             yMin: null, yMax: null }, opt);
+    this.reihen = new Map(); this.lw = leinwand(canvas, () => this.zeichnen());
+  }
+  /** name = Text für den Knopf, achse = Achsenbeschriftung, z. B. "s in cm" */
+  reihe(id, name, farbe, sichtbar = true, achse = name) { this.reihen.set(id, { name, farbe, sichtbar, achse, d: [] }); }
+  punkt(id, x, y) { const r = this.reihen.get(id); r.d.push([x, y]); if (r.d.length > 20000) r.d.splice(0, 5000); }
+  leeren() { for (const r of this.reihen.values()) r.d = []; }
+  achsen(opt) { Object.assign(this.o, opt); }
+  zeichnen() {
+    const { ctx, b, h } = this.lw, o = this.o, R = { l: 62, r: 14, o: 18, u: 46 };
+    ctx.clearRect(0, 0, b, h);
+    const sicht = [...this.reihen.values()].filter(r => r.sichtbar);
+    let xMax = 0; for (const r of sicht) if (r.d.length) xMax = Math.max(xMax, r.d[r.d.length - 1][0]);
+    const x1 = Math.max(o.fenster, xMax), x0 = x1 - o.fenster;
+    let y0 = o.yMin, y1 = o.yMax;
+    if (y0 === null || y1 === null) {
+      let lo = Infinity, hi = -Infinity;
+      for (const r of sicht) for (const [x, y] of r.d) if (x >= x0) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      if (!isFinite(lo)) { lo = -1; hi = 1; }
+      if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+      const rand = 0.1 * (hi - lo);
+      if (y0 === null) y0 = lo - rand; if (y1 === null) y1 = hi + rand;
+    }
+    const X = x => R.l + (x - x0) / (x1 - x0) * (b - R.l - R.r);
+    const Y = y => h - R.u - (y - y0) / (y1 - y0) * (h - R.o - R.u);
+    ctx.font = `${fs(13)}px ${css("--schrift")}`; ctx.lineWidth = 1;
+    const tx = teilung(x0, x1, Math.max(3, Math.floor(b / 90))), ty = teilung(y0, y1, Math.max(3, Math.floor(h / 55)));
+    ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#5a6675";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const v of tx.t) { ctx.beginPath(); ctx.moveTo(X(v), R.o); ctx.lineTo(X(v), h - R.u); ctx.stroke();
+                            ctx.fillText(fmt(v, tx.stellen), X(v), h - R.u + 5); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of ty.t) { ctx.beginPath(); ctx.moveTo(R.l, Y(v)); ctx.lineTo(b - R.r, Y(v)); ctx.stroke();
+                            ctx.fillText(fmt(v, ty.stellen), R.l - 6, Y(v)); }
+    // Achsen (Nulllinie hervorheben)
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5; ctx.beginPath();
+    const yNull = (y0 < 0 && y1 > 0) ? Y(0) : h - R.u;
+    ctx.moveTo(R.l, yNull); ctx.lineTo(b - R.r, yNull); ctx.moveTo(R.l, R.o); ctx.lineTo(R.l, h - R.u); ctx.stroke();
+    ctx.fillStyle = "#1b2430"; ctx.font = `600 ${fs(14)}px ${css("--schrift")}`;
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${o.xName} in ${o.xEinheit}`, b - R.r, h - 4);
+    ctx.save(); ctx.translate(14, R.o); ctx.rotate(-Math.PI / 2); ctx.textAlign = "right"; ctx.textBaseline = "top";
+    const yText = o.yName ? (o.yEinheit ? `${o.yName} in ${o.yEinheit}` : o.yName) : sicht.map(r => r.achse).join(",  ");
+    ctx.fillText(yText, 0, 0); ctx.restore();
+    // Kurven
+    ctx.save(); ctx.beginPath(); ctx.rect(R.l, R.o, b - R.l - R.r, h - R.o - R.u); ctx.clip();
+    for (const r of sicht) {
+      ctx.strokeStyle = r.farbe; ctx.lineWidth = 2.5; ctx.beginPath(); let an = false;
+      for (const [x, y] of r.d) { if (x < x0 - 1e-9) continue; an ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); an = true; }
+      ctx.stroke();
+      if (r.d.length) { const [x, y] = r.d[r.d.length - 1]; ctx.fillStyle = r.farbe;
+                        ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5, 0, 7); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  /** Knöpfe zum Ein-/Ausblenden der Kurven in ein Element einfügen */
+  auswahl(el) {
+    el.innerHTML = "";
+    for (const [id, r] of this.reihen) {
+      const k = document.createElement("button");
+      k.innerHTML = `<span style="color:${r.farbe}">━━</span> ${r.name}`;
+      k.classList.toggle("aktiv", r.sichtbar);
+      k.onclick = () => { r.sichtbar = !r.sichtbar; k.classList.toggle("aktiv", r.sichtbar); this.zeichnen(); };
+      el.appendChild(k);
+    }
+  }
+}
+
+/**
+ * Energiebalken. Beispiel:
+ *   const eb = new Balken(canvas, [{id:"pot", name:"E_Spann", farbe:css("--e-pot")}, ...], "J");
+ *   eb.zeichnen({pot: 0.2, kin: 0.1, ges: 0.3}, maxWert);
+ */
+class Balken {
+  constructor(canvas, arten, einheit = "J") { this.arten = arten; this.einheit = einheit;
+    this.lw = leinwand(canvas, () => this.letzte && this.zeichnen(...this.letzte)); }
+  zeichnen(werte, max) {
+    this.letzte = [werte, max];
+    const { ctx, b, h } = this.lw, n = this.arten.length, R = { l: 10, r: 10, o: 26, u: 30 };
+    ctx.clearRect(0, 0, b, h);
+    const bw = (b - R.l - R.r) / n, H = h - R.o - R.u, sk = max > 0 ? H / max : 0;
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(R.l, h - R.u); ctx.lineTo(b - R.r, h - R.u); ctx.stroke();
+    this.arten.forEach((a, i) => {
+      const v = Math.max(0, werte[a.id] || 0), x = R.l + i * bw + bw * 0.18, w = bw * 0.64;
+      ctx.fillStyle = a.farbe; ctx.fillRect(x, h - R.u - v * sk, w, v * sk);
+      ctx.font = `600 ${fs(14)}px ${css("--schrift")}`; ctx.fillStyle = "#1b2430"; ctx.textAlign = "center";
+      ctx.textBaseline = "top"; ctx.fillText(a.name, x + w / 2, h - R.u + 6);
+      ctx.textBaseline = "bottom"; ctx.font = `${fs(13)}px ${css("--schrift")}`;
+      ctx.fillText(fmt(werte[a.id] || 0, a.stellen ?? 2, this.einheit), x + w / 2, Math.max(R.o + 2, h - R.u - v * sk - 4));
+    });
+  }
+}
+
+/** Regler erzeugen. Liefert Objekt mit .wert; ruft beiAenderung(wert) auf. */
+function regler(container, { id, name, min, max, schritt, wert, einheit = "", stellen = 2, beiAenderung }) {
+  const box = document.createElement("div");
+  box.innerHTML = `<label for="r_${id}">${name} <span class="wert" id="w_${id}"></span></label>
+                   <input type="range" id="r_${id}" min="${min}" max="${max}" step="${schritt}" value="${wert}">`;
+  container.appendChild(box);
+  const inp = box.querySelector("input"), anz = box.querySelector(".wert");
+  const r = { get wert() { return parseFloat(inp.value); },
+              setzen(v) { inp.value = v; anz.textContent = fmt(parseFloat(inp.value), stellen, einheit); },
+              sperren(an) { inp.disabled = an; } };
+  r.setzen(wert);
+  inp.addEventListener("input", () => { anz.textContent = fmt(r.wert, stellen, einheit); beiAenderung && beiAenderung(r.wert); });
+  return r;
+}
+
+/** Datei aus der Seite heraus speichern (funktioniert offline) */
+function speichern(name, inhalt, typ) {
+  const a = document.createElement("a");
+  a.href = typeof inhalt === "string" ? URL.createObjectURL(new Blob([inhalt], { type: typ })) : inhalt;
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/** Mehrere Canvas nebeneinander als ein PNG speichern */
+function alsPNG(name, canvasListe) {
+  const b = canvasListe.reduce((s, c) => s + c.width, 0), h = Math.max(...canvasListe.map(c => c.height));
+  const z = document.createElement("canvas"); z.width = b; z.height = h;
+  const ctx = z.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, b, h);
+  let x = 0; for (const c of canvasListe) { ctx.drawImage(c, x, 0); x += c.width; }
+  speichern(name, z.toDataURL("image/png"));
+}
+
+/**
+ * Simulationsschleife mit festem Zeitschritt (physikalisch sauber, unabhängig von der Bildrate).
+ *   const lauf = new Schleife({dt: 0.001, schritt: dt => {...}, bild: () => {...}});
+ *   lauf.start(); lauf.pause(); lauf.tempo = 0.2 (Zeitlupe)
+ */
+class Schleife {
+  constructor({ dt, schritt, bild, beiStatus }) {
+    Object.assign(this, { dt, schritt, bild, beiStatus, laeuft: false, tempo: 1, rest: 0, tAlt: 0 });
+    const tick = tJetzt => {
+      if (this.laeuft) {
+        let echt = Math.min(0.1, (tJetzt - this.tAlt) / 1000);   // nach Tab-Wechsel nicht springen
+        this.rest += echt * this.tempo;
+        let n = 0; while (this.rest >= this.dt && n < 20000) { this.schritt(this.dt); this.rest -= this.dt; n++; }
+      }
+      this.tAlt = tJetzt; this.bild(); requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  start() { this.laeuft = true; this.beiStatus && this.beiStatus(true); }
+  pause() { this.laeuft = false; this.beiStatus && this.beiStatus(false); }
+  umschalten() { this.laeuft ? this.pause() : this.start(); }
+  einzelschritt(dauer) { this.pause(); const n = Math.round(dauer / this.dt); for (let i = 0; i < n; i++) this.schritt(this.dt); }
+}
+
+/**
+ * Schritt-für-Schritt-Modus zum Besprechen im Plenum.
+ *   schrittmodus([{text:"…", vorbereiten: () => {...}}, ...])
+ */
+function schrittmodus(schritte) {
+  let i = 0; const box = $("schritte");
+  const zeigen = () => { $("schrittNr").textContent = `Schritt ${i + 1} von ${schritte.length}`;
+    $("schrittText").innerHTML = schritte[i].text; schritte[i].vorbereiten && schritte[i].vorbereiten();
+    $("btnZurueck").disabled = i === 0; $("btnWeiter").disabled = i === schritte.length - 1; };
+  $("btnZurueck").onclick = () => { if (i > 0) { i--; zeigen(); } };
+  $("btnWeiter").onclick = () => { if (i < schritte.length - 1) { i++; zeigen(); } };
+  return { an() { box.classList.add("an"); i = 0; zeigen(); }, aus() { box.classList.remove("an"); },
+           get aktiv() { return box.classList.contains("an"); } };
+}
+
+/** Vollbild, Beamer-Ansicht, Tastatur */
+function bedienungEinrichten(lauf, { reset, einzel }) {
+  $("btnVoll").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  $("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+  $("btnStart").onclick = () => lauf.umschalten();
+  $("btnReset").onclick = reset;
+  $("btnSchritt").onclick = einzel;
+  $("btnLangsam").onclick = () => { lauf.tempo = lauf.tempo === 1 ? 0.2 : 1;
+    $("btnLangsam").textContent = `Zeitlupe: ${lauf.tempo === 1 ? "aus" : "an (×0,2)"}`;
+    $("btnLangsam").classList.toggle("aktiv", lauf.tempo !== 1); };
+  lauf.beiStatus = an => { $("btnStart").textContent = an ? "❚❚ Pause" : "▶ Start"; };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.key !== " ") return;
+    const k = e.key.toLowerCase();
+    if (k === " ") { e.preventDefault(); lauf.umschalten(); }
+    else if (k === "r") reset(); else if (k === "arrowright") einzel();
+    else if (k === "l") $("btnLangsam").click(); else if (k === "g") $("btnGross").click();
+    else if (k === "f") $("btnVoll").click();
+  });
+}
+
+/* =====================================================================
+   GEMEINSAM für die drei Kondensator-Simulationen
+   Plot mit festen Achsen, Schaltungsteile, Elektronen auf Drähten
+   ===================================================================== */
+const FARBE = { I: "#c62828", U: "#1f5c99", Q: "#2e7d32", elektron: "#f2a900", plus: "#c62828",
+                minus: "#1f5c99", draht: "#2b2b2b", alt: "#8a96a5", hilfe: "#5a6675" };
+
+/** Achsenteilung mit festem Schritt */
+function festeTeilung(min, max, schritt) {
+  const t = []; for (let v = Math.ceil(min / schritt - 1e-9) * schritt; v <= max + 1e-9 * schritt; v += schritt) t.push(v);
+  return { t, schritt, stellen: Math.max(0, -Math.floor(Math.log10(schritt) + 1e-9)) };
+}
+
+/** Schöne obere Grenze (1, 2, 2,5, 5 · 10^n) */
+function schoenOben(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
+  return (f <= 1 ? 1 : f <= 1.5 ? 1.5 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 3 ? 3 : f <= 4 ? 4 : f <= 5 ? 5 : f <= 6 ? 6 : f <= 8 ? 8 : 10) * p;
+}
+
+/**
+ * Diagramm mit festen Achsen. Nach dem Gitter wird plot.malen(ctx, plot) aufgerufen (Kurven, Hilfslinien).
+ *   const p = new Plot(canvas, {x0:0, x1:300, y0:0, y1:110, yName:"I", yEinheit:"mA"});
+ */
+class Plot {
+  constructor(canvas, o) {
+    this.o = Object.assign({ x0: 0, x1: 300, y0: 0, y1: 1, xName: "t", xEinheit: "s", yName: "", yEinheit: "",
+                             xSchritt: null, ySchritt: null, yFarbe: "#1b2430" }, o);
+    this.malen = null; this.canvas = canvas; this.lw = leinwand(canvas, () => this.zeichnen());
+  }
+  get R() { return { l: fs(58), r: 18, o: 16, u: fs(42) }; }
+  X(x) { const R = this.R, o = this.o; return R.l + (x - o.x0) / (o.x1 - o.x0) * (this.lw.b - R.l - R.r); }
+  Y(y) { const R = this.R, o = this.o, h = this.lw.h; return h - R.u - (y - o.y0) / (o.y1 - o.y0) * (h - R.o - R.u); }
+  xAus(px) { const R = this.R, o = this.o; return o.x0 + (px - R.l) / (this.lw.b - R.l - R.r) * (o.x1 - o.x0); }
+  yAus(py) { const R = this.R, o = this.o, h = this.lw.h; return o.y0 + (h - R.u - py) / (h - R.o - R.u) * (o.y1 - o.y0); }
+  zeichnen() {
+    const { ctx, b, h } = this.lw, o = this.o, R = this.R;
+    ctx.clearRect(0, 0, b, h);
+    const breit = b - R.l - R.r, hoch = h - R.o - R.u;
+    let tx = o.xSchritt ? festeTeilung(o.x0, o.x1, o.xSchritt) : teilung(o.x0, o.x1, Math.max(3, Math.floor(breit / 70)));
+    if (o.xSchritt && breit / tx.t.length < fs(34)) tx = festeTeilung(o.x0, o.x1, o.xSchritt * 2);
+    let ty = o.ySchritt ? festeTeilung(o.y0, o.y1, o.ySchritt) : teilung(o.y0, o.y1, Math.max(3, Math.floor(hoch / 45)));
+    if (o.ySchritt && hoch / ty.t.length < fs(18)) ty = festeTeilung(o.y0, o.y1, o.ySchritt * 2);
+    ctx.font = `${fs(13)}px ${css("--schrift")}`; ctx.lineWidth = 1;
+    ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#5a6675"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const v of tx.t) { ctx.beginPath(); ctx.moveTo(this.X(v), R.o); ctx.lineTo(this.X(v), h - R.u); ctx.stroke();
+      ctx.fillText(fmt(Math.abs(v) < 1e-9 ? 0 : v, tx.stellen), this.X(v), h - R.u + 5); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of ty.t) { ctx.beginPath(); ctx.moveTo(R.l, this.Y(v)); ctx.lineTo(b - R.r, this.Y(v)); ctx.stroke();
+      ctx.fillText(fmt(Math.abs(v) < 1e-9 ? 0 : v, ty.stellen), R.l - 6, this.Y(v)); }
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.6; ctx.beginPath();
+    const yNull = (o.y0 < 0 && o.y1 > 0) ? this.Y(0) : h - R.u;
+    ctx.moveTo(R.l, yNull); ctx.lineTo(b - R.r, yNull); ctx.moveTo(R.l, R.o); ctx.lineTo(R.l, h - R.u); ctx.stroke();
+    ctx.font = `600 ${fs(14)}px ${css("--schrift")}`; ctx.fillStyle = "#1b2430";
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.fillText(`${o.xName} in ${o.xEinheit}`, b - R.r, h - 3);
+    ctx.save(); ctx.translate(4, R.o); ctx.rotate(-Math.PI / 2); ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = o.yFarbe;
+    const [haupt, sub] = o.yName.split("_"), rest = ` in ${o.yEinheit}`, f1 = ctx.font, f2 = `600 ${fs(10)}px ${css("--schrift")}`;
+    const w1 = ctx.measureText(haupt).width, w3 = ctx.measureText(rest).width;
+    ctx.font = f2; const w2 = sub ? ctx.measureText(sub).width : 0; ctx.font = f1;
+    let xx = -(w1 + w2 + w3); ctx.fillText(haupt, xx, 0); xx += w1;
+    if (sub) { ctx.font = f2; ctx.fillText(sub, xx, fs(7)); ctx.font = f1; xx += w2; }
+    ctx.fillText(rest, xx, 0); ctx.restore();
+    if (this.malen) { ctx.save(); ctx.beginPath(); ctx.rect(R.l - 1, R.o - 8, breit + 10, hoch + 9); ctx.clip();
+      this.malen(ctx, this); ctx.restore(); }
+  }
+  /** Kurve aus Punkten [[x,y], …] */
+  kurve(ctx, d, farbe, breite = 3, strich = []) {
+    if (d.length < 2) return;
+    ctx.save(); ctx.strokeStyle = farbe; ctx.lineWidth = breite; ctx.setLineDash(strich); ctx.lineJoin = "round";
+    ctx.beginPath(); d.forEach(([x, y], i) => i ? ctx.lineTo(this.X(x), this.Y(y)) : ctx.moveTo(this.X(x), this.Y(y)));
+    ctx.stroke(); ctx.restore();
+  }
+  punkt(ctx, x, y, farbe, r = 5.5) { ctx.fillStyle = farbe; ctx.beginPath(); ctx.arc(this.X(x), this.Y(y), r, 0, 7); ctx.fill(); }
+  linie(ctx, xa, ya, xb, yb, farbe, breite = 1.8, strich = [7, 5]) {
+    ctx.save(); ctx.strokeStyle = farbe; ctx.lineWidth = breite; ctx.setLineDash(strich); ctx.beginPath();
+    ctx.moveTo(this.X(xa), this.Y(ya)); ctx.lineTo(this.X(xb), this.Y(yb)); ctx.stroke(); ctx.restore();
+  }
+}
+
+/* ---------- Schaltung zeichnen: virtuelle Koordinaten -> Pixel ---------- */
+/** Liefert Abbildung für eine Szene der virtuellen Größe vb × vh (Rand oben vy0) */
+function abbildung(lw, vb, vh, vy0 = 0, vx0 = 0) {
+  const s = Math.min(lw.b / vb, lw.h / vh), ox = (lw.b - vb * s) / 2 - vx0 * s, oy = (lw.h - vh * s) / 2 - vy0 * s;
+  return { s, x: x => ox + x * s, y: y => oy + y * s };
+}
+function draht(ctx, A, pts, farbe = FARBE.draht) {
+  ctx.save(); ctx.strokeStyle = farbe; ctx.lineWidth = Math.max(2, 4 * A.s); ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(A.x(x), A.y(y)) : ctx.moveTo(A.x(x), A.y(y))); ctx.stroke(); ctx.restore();
+}
+function knoten(ctx, A, x, y) { ctx.fillStyle = FARBE.draht; ctx.beginPath(); ctx.arc(A.x(x), A.y(y), Math.max(3, 7 * A.s), 0, 7); ctx.fill(); }
+/** Widerstand (Kasten) waagerecht von xa bis xb auf Höhe y */
+function widerstand(ctx, A, xa, xb, y) {
+  const hh = 16; ctx.save(); ctx.fillStyle = "#fff"; ctx.strokeStyle = FARBE.draht; ctx.lineWidth = Math.max(2, 4 * A.s);
+  ctx.fillRect(A.x(xa), A.y(y - hh), (xb - xa) * A.s, 2 * hh * A.s); ctx.strokeRect(A.x(xa), A.y(y - hh), (xb - xa) * A.s, 2 * hh * A.s);
+  ctx.restore();
+}
+/** Lampe mit Leuchten (hell 0…1) */
+function lampe(ctx, A, x, y, hell, r = 24) {
+  const X = A.x(x), Y = A.y(y), R = r * A.s;
+  if (hell > 0.01) {
+    const g = ctx.createRadialGradient(X, Y, R * 0.3, X, Y, R * (1.4 + 2.2 * hell));
+    g.addColorStop(0, `rgba(255,214,0,${0.95 * hell})`); g.addColorStop(1, "rgba(255,214,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, R * (1.4 + 2.2 * hell), 0, 7); ctx.fill();
+  }
+  ctx.save(); ctx.fillStyle = hell > 0.01 ? `rgb(255,${Math.round(255 - 60 * hell)},${Math.round(255 - 200 * hell)})` : "#fff";
+  ctx.strokeStyle = FARBE.draht; ctx.lineWidth = Math.max(2, 4 * A.s);
+  ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.stroke();
+  const d = R * 0.7071; ctx.beginPath(); ctx.moveTo(X - d, Y - d); ctx.lineTo(X + d, Y + d); ctx.moveTo(X + d, Y - d); ctx.lineTo(X - d, Y + d); ctx.stroke();
+  ctx.restore();
+}
+/** Messgerät (A oder V) */
+function messgeraet(ctx, A, x, y, buchstabe, farbe, r = 25) {
+  const X = A.x(x), Y = A.y(y), R = r * A.s;
+  ctx.save(); ctx.fillStyle = "#fff"; ctx.strokeStyle = farbe; ctx.lineWidth = Math.max(2.5, 5 * A.s);
+  ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = farbe; ctx.font = `700 ${Math.max(12, 28 * A.s)}px ${css("--schrift")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(buchstabe, X, Y + 1); ctx.restore();
+}
+/** Ladungskugel: Elektron (gelb, −) oder fehlendes Elektron (rot, +) */
+function kugel(ctx, A, x, y, plus, r = 10) {
+  const R = Math.max(4, r * A.s), X = A.x(x), Y = A.y(y);
+  ctx.save(); ctx.fillStyle = plus ? FARBE.plus : FARBE.elektron; ctx.strokeStyle = plus ? "#7a1010" : "#6b4a00"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.stroke();
+  if (R >= 5) { ctx.strokeStyle = plus ? "#fff" : "#3a2800"; ctx.lineWidth = Math.max(1.3, R * 0.22); const l = R * 0.55;
+    ctx.beginPath(); ctx.moveTo(X - l, Y); ctx.lineTo(X + l, Y); if (plus) { ctx.moveTo(X, Y - l); ctx.lineTo(X, Y + l); } ctx.stroke(); }
+  ctx.restore();
+}
+/** Kondensator: zwei waagerechte Platten (oben yo, unten yu), Breite w.
+    anzahl Ladungskugeln: oben rote +-Kugeln (Elektronen fehlen), unten gelbe Elektronen – sie sammeln sich zwischen den Platten. */
+function kondensator(ctx, A, x, yo, yu, w, anzahl) {
+  ctx.save(); ctx.fillStyle = "#555"; const dicke = 10;
+  ctx.fillRect(A.x(x - w / 2), A.y(yo - dicke / 2), w * A.s, dicke * A.s);
+  ctx.fillRect(A.x(x - w / 2), A.y(yu - dicke / 2), w * A.s, dicke * A.s);
+  ctx.restore();
+  const r = 11, proReihe = Math.max(1, Math.floor(w / (2 * r + 3))), n = Math.max(0, Math.min(2 * proReihe, anzahl));
+  for (let i = 0; i < n; i++) {
+    const reihe = Math.floor(i / proReihe), spalte = i % proReihe, inReihe = Math.min(proReihe, n - reihe * proReihe);
+    const xi = x + (spalte - (inReihe - 1) / 2) * (2 * r + 3);
+    kugel(ctx, A, xi, yo + dicke / 2 + r + 2 + reihe * (2 * r + 2), true, r);
+    kugel(ctx, A, xi, yu - dicke / 2 - r - 2 - reihe * (2 * r + 2), false, r);
+  }
+}
+/** Speicher-Anzeige: senkrechter Balken, anteil 0…1, Text darunter */
+function speicher(ctx, A, x, yo, yu, anteil, textUnten) {
+  const b = 46, X = A.x(x - b / 2), Y = A.y(yo), B = b * A.s, H = (yu - yo) * A.s, f = Math.max(0, Math.min(1, anteil));
+  ctx.save(); ctx.fillStyle = "#fff"; ctx.fillRect(X, Y, B, H);
+  ctx.fillStyle = "#2e7d32"; ctx.fillRect(X, Y + H * (1 - f), B, H * f);
+  ctx.strokeStyle = "#1b2430"; ctx.lineWidth = Math.max(1.5, 3 * A.s); ctx.strokeRect(X, Y, B, H);
+  ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(X, Y + H * k / 4); ctx.lineTo(X + B * 0.3, Y + H * k / 4); ctx.stroke(); }
+  ctx.restore();
+  text(ctx, A, "Speicher", x, yo - 20, { fett: true, groesse: 14 });
+  text(ctx, A, fmt(100 * f, 0, "%"), x, yo + (yu - yo) / 2, { fett: true, groesse: 14 });
+  text(ctx, A, textUnten, x, yu + 20, { farbe: "#2e7d32", fett: true, groesse: 14 });
+}
+/** Spannungsquelle (senkrecht): + oben (lange Platte), − unten */
+function quelle(ctx, A, x, yPlus, yMinus) {
+  ctx.save(); ctx.fillStyle = FARBE.draht;
+  ctx.fillRect(A.x(x - 36), A.y(yPlus - 2.5), 72 * A.s, 5 * A.s);
+  ctx.fillRect(A.x(x - 18), A.y(yMinus - 6), 36 * A.s, 12 * A.s);
+  ctx.font = `700 ${Math.max(12, 24 * A.s)}px ${css("--schrift")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = FARBE.plus; ctx.fillText("+", A.x(x + 52), A.y(yPlus - 8));
+  ctx.fillStyle = FARBE.minus; ctx.fillText("−", A.x(x + 52), A.y(yMinus + 8));
+  ctx.restore();
+}
+/** Elektronen als Punkte entlang eines Pfads (virtuelle Punkte), verschoben um phase */
+function elektronen(ctx, A, pfad, phase, abstand = 34) {
+  const laengen = [0];
+  for (let i = 1; i < pfad.length; i++) laengen.push(laengen[i - 1] + Math.hypot(pfad[i][0] - pfad[i - 1][0], pfad[i][1] - pfad[i - 1][1]));
+  const L = laengen[laengen.length - 1];
+  ctx.save(); ctx.fillStyle = FARBE.elektron; ctx.strokeStyle = "#6b4a00"; ctx.lineWidth = 1;
+  const r = Math.max(3, 8 * A.s);
+  for (let d = ((phase % abstand) + abstand) % abstand + 4; d < L - 4; d += abstand) {
+    let i = 1; while (laengen[i] < d) i++;
+    const f = (d - laengen[i - 1]) / (laengen[i] - laengen[i - 1]);
+    const x = pfad[i - 1][0] + f * (pfad[i][0] - pfad[i - 1][0]), y = pfad[i - 1][1] + f * (pfad[i][1] - pfad[i - 1][1]);
+    ctx.beginPath(); ctx.arc(A.x(x), A.y(y), r, 0, 7); ctx.fill(); ctx.stroke();
+    if (r >= 5) { ctx.save(); ctx.strokeStyle = "#3a2800"; ctx.lineWidth = Math.max(1.3, r * 0.22); ctx.beginPath();
+      ctx.moveTo(A.x(x) - r * 0.55, A.y(y)); ctx.lineTo(A.x(x) + r * 0.55, A.y(y)); ctx.stroke(); ctx.restore(); }
+  }
+  ctx.restore();
+}
+/** Text in virtuellen Koordinaten */
+function text(ctx, A, t, x, y, opt = {}) { beschriftung(ctx, t, A.x(x), A.y(y), Object.assign({ groesse: 15 }, opt)); }
+
+/** Beschriftung „t_H = …“ mit tiefgestelltem H (links ausgerichtet ab x) */
+function tHText(ctx, x, y, rest, farbe) {
+  ctx.save(); const f1 = `600 ${fs(14)}px ${css("--schrift")}`, f2 = `600 ${fs(10)}px ${css("--schrift")}`;
+  ctx.font = f1; const w1 = ctx.measureText("t").width, w3 = ctx.measureText(" " + rest).width; ctx.font = f2; const w2 = ctx.measureText("H").width;
+  ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillRect(x - 3, y - fs(10), w1 + w2 + w3 + 6, fs(20));
+  ctx.fillStyle = farbe; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ctx.font = f1; ctx.fillText("t", x, y); ctx.font = f2; ctx.fillText("H", x + w1, y + fs(4)); ctx.font = f1; ctx.fillText(" " + rest, x + w1 + w2, y);
+  ctx.restore();
+}
+
+/* =====================================================================
+   ANIMATION – Aufbau eines Kondensators: echtes Bauteil → Wickel → Modell
+   7 Stufen, jede mit eigener Animation p = 0…1 (Schieberegler oder Abspielen).
+   Virtuelle Zeichenfläche 1300 × 640.
+   ===================================================================== */
+const F1 = "#aeb9c4", F2 = "#6c7a87", PAPIER = "#ead9a6", HUELLE = "#1f3f8f";
+const VB = 1300, VH = 640;
+const Z = { stufe: 0, p: 0, spielt: false, tour: false, warte: 0, phase: 0 };
+const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const szene = leinwand($("szene"), () => zeichnen());
+
+/* ---------- kleine Zeichenhilfen ---------- */
+function ellipse(ctx, A, cx, cy, rx, ry, fuellung, rand, breite = 2) {
+  ctx.beginPath(); ctx.ellipse(A.x(cx), A.y(cy), rx * A.s, ry * A.s, 0, 0, 7);
+  if (fuellung) { ctx.fillStyle = fuellung; ctx.fill(); }
+  if (rand) { ctx.strokeStyle = rand; ctx.lineWidth = breite; ctx.stroke(); }
+}
+function zylGradient(ctx, A, cx, rx, farben) {
+  const g = ctx.createLinearGradient(A.x(cx - rx), 0, A.x(cx + rx), 0);
+  farben.forEach((f, i) => g.addColorStop(i / (farben.length - 1), f)); return g;
+}
+/** Zylindermantel (vordere Hälfte) von yo bis yu */
+function mantel(ctx, A, cx, yo, yu, rx, ry, fuellung) {
+  ctx.beginPath(); ctx.moveTo(A.x(cx - rx), A.y(yo)); ctx.lineTo(A.x(cx - rx), A.y(yu));
+  ctx.ellipse(A.x(cx), A.y(yu), rx * A.s, ry * A.s, 0, Math.PI, 0, true);
+  ctx.lineTo(A.x(cx + rx), A.y(yo)); ctx.ellipse(A.x(cx), A.y(yo), rx * A.s, ry * A.s, 0, 0, Math.PI, false);
+  ctx.closePath(); ctx.fillStyle = fuellung; ctx.fill();
+}
+function hinweis(ctx, A, t, x, y, zx, zy, alpha = 1, ausr = "left") {
+  if (alpha <= 0.01) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(A.x(x), A.y(y)); ctx.lineTo(A.x(zx), A.y(zy)); ctx.stroke();
+  ctx.fillStyle = "#1b2430"; ctx.beginPath(); ctx.arc(A.x(zx), A.y(zy), 3.5, 0, 7); ctx.fill();
+  text(ctx, A, t, x + (ausr === "left" ? 6 : -6), y, { ausrichtung: ausr, fett: true, groesse: 16 });
+  ctx.restore();
+}
+function linieV(ctx, A, pts, farbe, breite) {
+  ctx.save(); ctx.strokeStyle = farbe; ctx.lineWidth = Math.max(1, breite * A.s); ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(A.x(x), A.y(y)) : ctx.moveTo(A.x(x), A.y(y))); ctx.stroke(); ctx.restore();
+}
+
+/* ---------- Stufe 1 und 2: das echte Bauteil (Elektrolytkondensator) ---------- */
+const E = { cx: 650, top: 150, bot: 440, rx: 120, ry: 34 };
+function beine(ctx, A) {
+  linieV(ctx, A, [[E.cx - 40, E.bot + 20], [E.cx - 40, 575]], "#b8bec4", 7);
+  linieV(ctx, A, [[E.cx + 40, E.bot + 20], [E.cx + 40, 600]], "#b8bec4", 7);
+  ellipse(ctx, A, E.cx, E.bot + 6, E.rx - 12, E.ry - 4, "#2a2a2a");
+}
+function deckel(ctx, A) {
+  ellipse(ctx, A, E.cx, E.top, E.rx, E.ry, zylGradient(ctx, A, E.cx, E.rx, ["#8d969e", "#e3e8ec", "#a4adb5"]), "#5b636b", 2);
+  ctx.save(); ctx.strokeStyle = "#5b636b"; ctx.lineWidth = Math.max(1.5, 3 * A.s);
+  ctx.beginPath(); ctx.moveTo(A.x(E.cx - 70), A.y(E.top)); ctx.lineTo(A.x(E.cx + 70), A.y(E.top));
+  ctx.moveTo(A.x(E.cx), A.y(E.top - 22)); ctx.lineTo(A.x(E.cx), A.y(E.top + 22)); ctx.stroke(); ctx.restore();
+}
+function huelleVorn(ctx, A, alpha) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  mantel(ctx, A, E.cx, E.top + 4, E.bot, E.rx, E.ry, zylGradient(ctx, A, E.cx, E.rx, ["#0f1f4d", HUELLE, "#5f7fd0", HUELLE, "#0f1f4d"]));
+  // Minus-Streifen
+  ctx.save(); ctx.beginPath(); ctx.rect(A.x(E.cx - E.rx), 0, (E.rx * 0.55) * A.s, szene.h); ctx.clip();
+  mantel(ctx, A, E.cx, E.top + 4, E.bot, E.rx, E.ry, zylGradient(ctx, A, E.cx, E.rx, ["#8c95a3", "#d9dee6", "#eef1f5"])); ctx.restore();
+  for (let y = E.top + 50; y < E.bot - 10; y += 55) text(ctx, A, "−", E.cx - E.rx * 0.72, y, { groesse: 26, fett: true, farbe: HUELLE, hintergrund: false });
+  text(ctx, A, "1000 µF", E.cx + 25, E.top + 120, { groesse: 22, fett: true, farbe: "#fff", hintergrund: false });
+  text(ctx, A, "16 V", E.cx + 25, E.top + 160, { groesse: 22, fett: true, farbe: "#fff", hintergrund: false });
+  text(ctx, A, "105 °C", E.cx + 25, E.top + 200, { groesse: 16, farbe: "#dfe6ff", hintergrund: false });
+  ctx.restore();
+}
+/** Wickel im Becher, Schnitt durch die Mitte */
+function wickelSchnitt(ctx, A, sichtbar) {
+  if (sichtbar <= 0) return;
+  ctx.save(); ctx.globalAlpha = sichtbar;
+  // Innenwand des Bechers
+  mantel(ctx, A, E.cx, E.top + 4, E.bot, E.rx, E.ry, "#7d868e");
+  const r = E.rx - 12, n = 16, b = 2 * r / (4 * n / 2);
+  const farben = [F1, PAPIER, F2, PAPIER];
+  for (let i = 0; i < 2 * n; i++) {
+    const x = E.cx - r + i * (2 * r / (2 * n));
+    ctx.fillStyle = farben[(i < n ? i : 2 * n - 1 - i) % 4];
+    ctx.fillRect(A.x(x), A.y(E.top + 16), (2 * r / (2 * n)) * A.s + 0.5, (E.bot - E.top - 24) * A.s);
+  }
+  // Oberseite des Wickels: Ringe
+  for (let k = n; k > 0; k--) ellipse(ctx, A, E.cx, E.top + 16, r * k / n, (E.ry - 6) * k / n, farben[(n - k) % 4]);
+  // Anschlussfahnen zu den Beinen
+  linieV(ctx, A, [[E.cx - 40, E.bot + 20], [E.cx - 40, E.bot - 40]], F1, 10);
+  linieV(ctx, A, [[E.cx + 40, E.bot + 20], [E.cx + 40, E.bot - 40]], F2, 10);
+  ctx.restore();
+}
+function stufe1(ctx, A, p) {
+  beine(ctx, A); mantel(ctx, A, E.cx, E.top + 4, E.bot, E.rx, E.ry, HUELLE); huelleVorn(ctx, A, 1); deckel(ctx, A);
+  hinweis(ctx, A, "Becher aus Aluminium mit Kunststoff-Hülle", 820, 250, E.cx + E.rx - 10, 260, ease(p * 4), "left");
+  hinweis(ctx, A, "Markierung: Minuspol", 300, 300, E.cx - E.rx + 20, 300, ease(p * 4 - 1), "right");
+  hinweis(ctx, A, "Aufdruck: Kapazität und höchste Spannung", 820, 180, E.cx + 75, E.top + 125, ease(p * 4 - 2), "left");
+  hinweis(ctx, A, "zwei Anschlussdrähte", 820, 560, E.cx + 40, 550, ease(p * 4 - 3), "left");
+  // Größenvergleich
+  ctx.save(); ctx.globalAlpha = ease(p * 4 - 3);
+  linieV(ctx, A, [[E.cx - E.rx, 625], [E.cx + E.rx, 625]], "#1b2430", 3);
+  linieV(ctx, A, [[E.cx - E.rx, 615], [E.cx - E.rx, 635]], "#1b2430", 3); linieV(ctx, A, [[E.cx + E.rx, 615], [E.cx + E.rx, 635]], "#1b2430", 3);
+  text(ctx, A, "etwa 1 cm (stark vergrößert)", E.cx - E.rx - 12, 625, { ausrichtung: "right", groesse: 14 });
+  ctx.restore();
+}
+function stufe2(ctx, A, p) {
+  beine(ctx, A); wickelSchnitt(ctx, A, ease(p * 1.5)); huelleVorn(ctx, A, 1 - ease(p * 1.5));
+  { const a = 1 - ease(p * 1.5); if (a > 0) { ctx.save(); ctx.globalAlpha = a; deckel(ctx, A); ctx.restore(); } }
+  const t = ease(p * 3 - 1.6);
+  hinweis(ctx, A, "Metallfolie 1", 880, 220, E.cx + 92, 260, t);
+  hinweis(ctx, A, "Papier (Isolator)", 880, 290, E.cx + 84, 300, t);
+  hinweis(ctx, A, "Metallfolie 2", 880, 360, E.cx + 76, 345, t);
+  hinweis(ctx, A, "Folie 1 → Draht 1", 330, 470, E.cx - 40, E.bot - 20, t, "right");
+  hinweis(ctx, A, "Folie 2 → Draht 2", 880, 520, E.cx + 40, E.bot - 5, t);
+  if (t > 0) text(ctx, A, "Innen: ein fest aufgewickelter Streifen – der Wickel", E.cx, 90, { fett: true, groesse: 18 });
+}
+
+/* ---------- Stufe 3: Wickel von oben ---------- */
+function stufe3(ctx, A, p) {
+  const cx = 650, cy = 330, r0 = 14, steig = 30, N = 6.25, dreh = p * Math.PI * 0.6;
+  const spirale = (off, farbe, breite) => {
+    const pts = []; for (let th = 0; th <= N * 2 * Math.PI; th += 0.05) { const r = r0 + steig * th / (2 * Math.PI) + off;
+      pts.push([cx + r * Math.cos(th + dreh), cy + r * Math.sin(th + dreh)]); }
+    linieV(ctx, A, pts, farbe, breite); return pts[pts.length - 1];
+  };
+  ellipse(ctx, A, cx, cy, r0 + steig * N + 18, r0 + steig * N + 18, "#f7f1de");
+  spirale(7.5, PAPIER, 15); spirale(22.5, PAPIER, 15);
+  const e1 = spirale(0, F1, 6), e2 = spirale(15, F2, 6);
+  const t = ease(p * 2);
+  const R = r0 + steig * N;
+  const punkt = (winkel, off) => { let th = winkel - dreh; while (th + 2 * Math.PI <= N * 2 * Math.PI) th += 2 * Math.PI;
+    while (th > N * 2 * Math.PI) th -= 2 * Math.PI; const r = r0 + steig * th / (2 * Math.PI) + off; return [cx + r * Math.cos(winkel), cy + r * Math.sin(winkel)]; };
+  const q1 = punkt(Math.PI + 0.45, 0), q2 = punkt(Math.PI, 15), q3 = punkt(Math.PI - 0.45, 7.5);
+  hinweis(ctx, A, "Metallfolie 1", 300, 170, q1[0], q1[1], t, "right");
+  hinweis(ctx, A, "Metallfolie 2", 300, 330, q2[0], q2[1], t, "right");
+  hinweis(ctx, A, "Papier (Isolator)", 300, 490, q3[0], q3[1], t, "right");
+  text(ctx, A, "Blick von oben auf den Wickel", cx, 70, { fett: true, groesse: 18 });
+  if (p > 0.5) { ctx.save(); ctx.globalAlpha = ease(p * 2 - 1);
+    text(ctx, A, "Die beiden Folien berühren sich nie.", 1050, 560, { fett: true, groesse: 17 }); ctx.restore(); }
+}
+
+/* ---------- Stufe 4: Abwickeln (wie ein Teppich) ---------- */
+const W = { r0: 14, steig: 17, N: 4, x0: 90, boden: 470, dicke: 10 };
+const tabelle = (() => { const t = [[0, 0]]; let s = 0, alt = null;
+  for (let th = 0; th <= W.N * 2 * Math.PI + 1e-9; th += 0.01) { const r = W.r0 + W.steig * th / (2 * Math.PI);
+    if (alt) s += Math.hypot(r * Math.cos(th) - alt[0], r * Math.sin(th) - alt[1]); alt = [r * Math.cos(th), r * Math.sin(th)]; t.push([th, s]); }
+  return t; })();
+const L_GES = tabelle[tabelle.length - 1][1];
+function thetaVonS(s) { let i = 1; while (i < tabelle.length - 1 && tabelle[i][1] < s) i++;
+  const [t0, s0] = tabelle[i - 1], [t1, s1] = tabelle[i]; return t0 + (t1 - t0) * (s - s0) / Math.max(1e-9, s1 - s0); }
+function stufe4(ctx, A, p) {
+  const u = ease(p) * L_GES, thU = thetaVonS(L_GES - u), rho = W.r0 + W.steig * thU / (2 * Math.PI);
+  const xc = W.x0 + u, yc = W.boden - W.dicke / 2 - rho;
+  // Boden
+  linieV(ctx, A, [[40, W.boden + 4], [1280, W.boden + 4]], "#c9d1db", 6);
+  // abgewickelter Teil
+  if (u > 0) {
+    ctx.save(); ctx.fillStyle = PAPIER; ctx.fillRect(A.x(W.x0), A.y(W.boden - W.dicke - 4), u * A.s, (W.dicke + 6) * A.s); ctx.restore();
+    linieV(ctx, A, [[W.x0, W.boden - W.dicke], [xc, W.boden - W.dicke]], F1, 5);
+    linieV(ctx, A, [[W.x0, W.boden], [xc, W.boden]], F2, 5);
+  }
+  // aufgewickelter Teil
+  if (thU > 0.05) {
+    const spir = (off, farbe, breite) => { const pts = [];
+      for (let th = 0; th <= thU; th += 0.04) { const r = W.r0 + W.steig * th / (2 * Math.PI) + off, a = Math.PI / 2 - (thU - th);
+        pts.push([xc + r * Math.cos(a), yc + r * Math.sin(a)]); }
+      linieV(ctx, A, pts, farbe, breite); };
+    spir(0, PAPIER, 17); spir(-W.dicke / 2, F1, 5); spir(W.dicke / 2, F2, 5);
+  }
+  text(ctx, A, "Der Wickel wird abgerollt", 650, 70, { fett: true, groesse: 18 });
+  const t = ease(p * 1.4 - 0.4);
+  if (t > 0) { ctx.save(); ctx.globalAlpha = t;
+    hinweis(ctx, A, "Metallfolie 1", 420, 330, 400, W.boden - W.dicke, 1);
+    hinweis(ctx, A, "Papier", 600, 380, 580, W.boden - W.dicke / 2, 1);
+    hinweis(ctx, A, "Metallfolie 2", 760, 560, 740, W.boden, 1);
+    text(ctx, A, "Ausgebreitet sind die Folien viel größer als das Bauteil: große Fläche auf kleinem Raum.", 650, 610, { groesse: 16 });
+    ctx.restore(); }
+}
+
+/* ---------- Stufe 5: vom Streifen zum Plattenmodell ---------- */
+const M = { cx: 650, w: 640, yA: 245, yB: 355, d: 14 };
+function plattenmodell(ctx, A, t, mitTexten = true, papierAlpha = 1) {
+  const xL = lerp(W.x0, M.cx - M.w / 2, t), xR = lerp(W.x0 + L_GES, M.cx + M.w / 2, t);
+  const yA = lerp(W.boden - W.dicke, M.yA, t), yB = lerp(W.boden, M.yB, t), d = lerp(5, M.d, t);
+  ctx.save(); ctx.globalAlpha = papierAlpha; ctx.fillStyle = PAPIER;
+  ctx.fillRect(A.x(xL), A.y(yA), (xR - xL) * A.s, (yB - yA) * A.s); ctx.restore();
+  ctx.fillStyle = F1; ctx.fillRect(A.x(xL), A.y(yA - d / 2), (xR - xL) * A.s, d * A.s);
+  ctx.fillStyle = F2; ctx.fillRect(A.x(xL), A.y(yB - d / 2), (xR - xL) * A.s, d * A.s);
+  ctx.strokeStyle = "#3d4650"; ctx.lineWidth = 1.2; ctx.strokeRect(A.x(xL), A.y(yA - d / 2), (xR - xL) * A.s, d * A.s);
+  ctx.strokeRect(A.x(xL), A.y(yB - d / 2), (xR - xL) * A.s, d * A.s);
+  const tD = ease(t * 5 - 4);
+  if (tD > 0) { ctx.save(); ctx.globalAlpha = tD;
+    linieV(ctx, A, [[M.cx, M.yA - M.d / 2], [M.cx, 120]], FARBE.draht, 5); linieV(ctx, A, [[M.cx, M.yB + M.d / 2], [M.cx, 480]], FARBE.draht, 5);
+    if (mitTexten) {
+      text(ctx, A, "Platte 1 (Metall)", M.cx + M.w / 2 + 14, M.yA, { ausrichtung: "left", fett: true, groesse: 16 });
+      text(ctx, A, "Isolator", M.cx + M.w / 2 + 14, (M.yA + M.yB) / 2, { ausrichtung: "left", fett: true, groesse: 16 });
+      text(ctx, A, "Platte 2 (Metall)", M.cx + M.w / 2 + 14, M.yB, { ausrichtung: "left", fett: true, groesse: 16 });
+      text(ctx, A, "Abstand d", M.cx - M.w / 2 - 14, (M.yA + M.yB) / 2, { ausrichtung: "right", groesse: 15 });
+      pfeil(ctx, A.x(M.cx - M.w / 2 - 6), A.y((M.yA + M.yB) / 2 - 8), A.x(M.cx - M.w / 2 - 6), A.y(M.yA + 6), "#1b2430", 2, 8);
+      pfeil(ctx, A.x(M.cx - M.w / 2 - 6), A.y((M.yA + M.yB) / 2 + 8), A.x(M.cx - M.w / 2 - 6), A.y(M.yB - 6), "#1b2430", 2, 8);
+      text(ctx, A, "Fläche A der Platten", M.cx - 170, M.yA - 30, { groesse: 15 });
+    }
+    ctx.restore(); }
+}
+function stufe5(ctx, A, p) {
+  if (p < 0.5) linieV(ctx, A, [[40, W.boden + 4], [1280, W.boden + 4]], "#c9d1db", 6 * (1 - ease(p * 2)));
+  plattenmodell(ctx, A, ease(p));
+  text(ctx, A, p < 0.8 ? "Die Folien werden als zwei flache Platten gezeichnet …" : "Das Modell: der Plattenkondensator", 650, 70, { fett: true, groesse: 18 });
+}
+
+/* ---------- Stufe 6: Schaltzeichen ---------- */
+function stufe6(ctx, A, p) {
+  const t = ease(p), w = lerp(M.w, 150, t), g = lerp(M.yB - M.yA, 46, t), d = lerp(M.d, 12, t), lang = lerp(120, 170, t);
+  ctx.save(); ctx.translate(A.x(M.cx), A.y(300)); ctx.rotate(t * Math.PI / 2);
+  const s = A.s;
+  ctx.globalAlpha = 1 - t; ctx.fillStyle = PAPIER; ctx.fillRect(-w / 2 * s, -g / 2 * s, w * s, g * s); ctx.globalAlpha = 1;
+  ctx.fillStyle = lerp(0, 1, t) > 0.6 ? "#1b2430" : F1; ctx.fillRect(-w / 2 * s, (-g / 2 - d / 2) * s, w * s, d * s);
+  ctx.fillStyle = t > 0.6 ? "#1b2430" : F2; ctx.fillRect(-w / 2 * s, (g / 2 - d / 2) * s, w * s, d * s);
+  ctx.strokeStyle = "#1b2430"; ctx.lineWidth = Math.max(2, 5 * s); ctx.beginPath();
+  ctx.moveTo(0, (-g / 2 - d / 2) * s); ctx.lineTo(0, (-g / 2 - d / 2 - lang) * s);
+  ctx.moveTo(0, (g / 2 + d / 2) * s); ctx.lineTo(0, (g / 2 + d / 2 + lang) * s); ctx.stroke();
+  ctx.restore();
+  text(ctx, A, t < 0.9 ? "Für Schaltpläne wird das Modell noch einfacher …" : "Das Schaltzeichen des Kondensators", 650, 70, { fett: true, groesse: 18 });
+  if (t > 0.9) { text(ctx, A, "Strich = Platte", 650, 470, { groesse: 17 }); text(ctx, A, "Lücke = Isolator", 650, 505, { groesse: 17 }); }
+}
+
+/* ---------- Stufe 7: Laden im Modell ---------- */
+function stufe7(ctx, A, p) {
+  const q = ease(p);
+  // Stromkreis zur Quelle
+  draht(ctx, A, [[M.cx, M.yA - M.d / 2], [M.cx, 120], [200, 120], [200, 285]]);
+  draht(ctx, A, [[M.cx, M.yB + M.d / 2], [M.cx, 520], [200, 520], [200, 315]]);
+  quelle(ctx, A, 200, 285, 315);
+  text(ctx, A, "Quelle", 120, 300, { ausrichtung: "right", fett: true });
+  if (Z.spielt && q < 0.98) {
+    elektronen(ctx, A, [[200, 315], [200, 520], [M.cx, 520], [M.cx, M.yB + M.d / 2]], Z.phase, 40);
+    elektronen(ctx, A, [[M.cx, M.yA - M.d / 2], [M.cx, 120], [200, 120], [200, 285]], Z.phase, 40);
+  }
+  plattenmodell(ctx, A, 1, false);
+  const n = Math.round(q * 18), r = 13;
+  for (let i = 0; i < n; i++) { const x = M.cx - M.w / 2 + 25 + i * ((M.w - 50) / 17);
+    kugel(ctx, A, x, M.yA + M.d / 2 + r + 3, true, r); kugel(ctx, A, x, M.yB - M.d / 2 - r - 3, false, r); }
+  speicher(ctx, A, 1150, 220, 400, q, "");
+  text(ctx, A, "Elektronen sammeln sich auf Platte 2, auf Platte 1 fehlen sie.", 650, 590, { groesse: 16, fett: true });
+  text(ctx, A, "Laden im Modell", 650, 70, { fett: true, groesse: 18 });
+}
+
+/* ---------- Stufen, Texte, Steuerung ---------- */
+const STUFEN = [
+  { titel: "1 · Das echte Bauteil", dauer: 4, f: stufe1,
+    text: "So sieht ein echter Kondensator aus (ein <b>Elektrolytkondensator</b>, wie er in vielen Geräten steckt). Außen sieht man einen Becher mit Kunststoff-Hülle, einen Aufdruck mit Kapazität und Spannung und unten zwei Anschlussdrähte." },
+  { titel: "2 · Hülle aufschneiden", dauer: 3, f: stufe2,
+    text: "Wir schneiden den Becher auf. Innen steckt ein fest aufgewickelter Streifen, der <b>Wickel</b>. Er besteht aus zwei <b>Metallfolien</b> mit <b>Papier</b> dazwischen. Jede Folie ist mit einem Anschlussdraht verbunden." },
+  { titel: "3 · Der Wickel von oben", dauer: 4, f: stufe3,
+    text: "Von oben sieht man die Schichten: Metallfolie 1, Papier, Metallfolie 2, Papier, … Das Papier trennt die Folien. Die beiden Folien <b>berühren sich nie</b>, sonst würde der Kondensator nicht funktionieren." },
+  { titel: "4 · Abwickeln", dauer: 6, f: stufe4,
+    text: "Wir rollen den Wickel ab. Die Folien sind <b>lang und dünn</b>. Ausgebreitet haben sie eine viel größere Fläche als das kleine Bauteil. Durch das Aufwickeln passt diese große Fläche auf wenig Platz." },
+  { titel: "5 · Das Modell", dauer: 3.5, f: stufe5,
+    text: "Für das Verständnis reicht ein einfaches <b>Modell</b>: zwei Metallplatten, dazwischen ein Isolator. Das ist der <b>Plattenkondensator</b>. Je größer die Fläche <i>A</i> und je kleiner der Abstand <i>d</i>, desto mehr Ladung kann er speichern." },
+  { titel: "6 · Das Schaltzeichen", dauer: 3, f: stufe6,
+    text: "Im Schaltplan zeichnet man nur noch zwei kurze Striche für die zwei Platten. Die Lücke dazwischen steht für den Isolator." },
+  { titel: "7 · Laden im Modell", dauer: 5, f: stufe7,
+    text: "Beim Laden schiebt die Quelle Elektronen auf Platte 2 (gelb, −). Auf Platte 1 fehlen dann Elektronen (rot, +). Durch den Isolator können sie nicht hinüber. Der Kondensator <b>speichert</b> die Ladung." },
+];
+for (let i = 0; i < STUFEN.length; i++) { const k = document.createElement("button"); k.textContent = i + 1; k.title = STUFEN[i].titel;
+  k.onclick = () => stufeSetzen(i, true); $("stufen").appendChild(k); }
+function stufeSetzen(i, abspielen) {
+  Z.stufe = Math.max(0, Math.min(STUFEN.length - 1, i)); Z.p = 0; Z.warte = 0; Z.spielt = !!abspielen;
+  [...$("stufen").children].forEach((k, j) => k.classList.toggle("aktiv", j === Z.stufe));
+  $("stufeTitel").textContent = STUFEN[Z.stufe].titel; $("stufeText").innerHTML = STUFEN[Z.stufe].text;
+  $("btnZurueck2").disabled = Z.stufe === 0; $("btnWeiter2").disabled = Z.stufe === STUFEN.length - 1;
+}
+function zeichnen() {
+  const { ctx, b, h } = szene; ctx.clearRect(0, 0, b, h);
+  const A = abbildung(szene, VB, VH); STUFEN[Z.stufe].f(ctx, A, Z.p);
+}
+const lauf = new Schleife({ dt: 1 / 60, schritt: dt => {
+    if (Z.spielt) { Z.p = Math.min(1, Z.p + dt / STUFEN[Z.stufe].dauer); Z.phase += 90 * dt;
+      if (Z.p >= 1) { Z.spielt = Z.tour; if (Z.tour) { Z.warte += dt; Z.spielt = true; Z.p = 1;
+        if (Z.warte > 2.5) { if (Z.stufe < STUFEN.length - 1) stufeSetzen(Z.stufe + 1, true); else { Z.tour = false; Z.spielt = false; } } } } }
+  }, bild: () => { zeichnen(); $("fortschritt").value = Z.p;
+    $("btnStart").textContent = Z.spielt && !Z.tour ? "❚❚ Pause" : "▶ Abspielen";
+    $("btnTour").classList.toggle("aktiv", Z.tour); } });
+lauf.start();
+$("btnStart").onclick = () => { Z.tour = false; if (Z.spielt) Z.spielt = false; else { if (Z.p >= 1) Z.p = 0; Z.spielt = true; } };
+$("btnWeiter2").onclick = () => { Z.tour = false; stufeSetzen(Z.stufe + 1, true); };
+$("btnZurueck2").onclick = () => { Z.tour = false; stufeSetzen(Z.stufe - 1, true); };
+$("btnTour").onclick = () => { Z.tour = !Z.tour; if (Z.tour) stufeSetzen(0, true); else Z.spielt = false; };
+$("fortschritt").addEventListener("input", e => { Z.spielt = false; Z.tour = false; Z.p = parseFloat(e.target.value); });
+$("btnPNG").onclick = () => alsPNG("kondensator_aufbau.png", [$("szene")]);
+$("btnVoll").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+$("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" && e.key !== " ") return; const k = e.key.toLowerCase();
+  if (k === " ") { e.preventDefault(); $("btnStart").click(); } else if (k === "arrowright") $("btnWeiter2").click();
+  else if (k === "arrowleft") $("btnZurueck2").click(); else if (k === "g") $("btnGross").click(); else if (k === "f") $("btnVoll").click();
+});
+$("infoText").innerHTML = `
+  <p>Gezeigt wird ein <b>Elektrolytkondensator</b> (Elko). Stark vereinfacht: Beim echten Elko ist der eigentliche Isolator eine hauchdünne
+  Oxidschicht auf der Aluminiumfolie, das Papier ist mit einer leitenden Flüssigkeit (Elektrolyt) getränkt. Für die Schülerinnen und Schüler
+  genügt: zwei Metallfolien, dazwischen ein Isolator.</p>
+  <p>Der Kondensator im Fahrradrücklicht (1 F, „Goldcap“) ist ein <b>Doppelschichtkondensator</b>: Seine Elektroden bestehen aus Aktivkohle mit riesiger innerer
+  Oberfläche. Das Prinzip bleibt gleich: große Fläche, sehr kleiner Abstand, deshalb große Kapazität.</p>
+  <p class="klein">Abmessungen und Schichtzahl sind zur Anschauung vergrößert und vereinfacht.</p>`;
+stufeSetzen(0, true);
+</script>
+</body>
+</html>
